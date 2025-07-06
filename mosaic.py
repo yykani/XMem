@@ -17,6 +17,10 @@ def parse_args():
                         help='RGB color for color mosaic type (comma-separated, e.g. 255,0,0 for red)')
     parser.add_argument('--blur_strength', type=int, default=21,
                         help='Blur strength for blur mosaic type (odd number)')
+    parser.add_argument('--output_video', action='store_true',
+                        help='Additionally create MP4 video from the output images')
+    parser.add_argument('--fps', type=float, default=16.0,
+                        help='Frames per second for output video (default: 16)')
     return parser.parse_args()
 
 def load_mask(mask_path, dilate=0, blur=0):
@@ -190,12 +194,47 @@ def main():
         )
         out_path = os.path.join(out_dir, mask_file)
         cv2.imwrite(out_path, mosaic_img)
-        
-        # Progress update
+          # Progress update
         if (i+1) % 10 == 0 or i+1 == total:
             print(f"Progress: {i+1}/{total} ({(i+1)/total*100:.1f}%)")
-
+            
     print(f"Done! Mosaic images saved to: {out_dir}")
+    
+    # MP4ビデオの作成（オプション）
+    if args.output_video:
+        try:
+            video_path = os.path.join(os.path.dirname(out_dir), f"mosaic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+            print(f"Creating video file: {video_path}")
+            
+            # 画像ファイルを番号順にソート
+            processed_files = sorted([f for f in os.listdir(out_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+            
+            if processed_files:
+                # 最初のフレームからビデオサイズを取得
+                first_frame = cv2.imread(os.path.join(out_dir, processed_files[0]))
+                height, width = first_frame.shape[:2]
+                
+                # VideoWriterの初期化
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                video = cv2.VideoWriter(video_path, fourcc, args.fps, (width, height))
+                
+                # 各フレームをビデオに追加
+                for i, img_file in enumerate(processed_files):
+                    img_path = os.path.join(out_dir, img_file)
+                    frame = cv2.imread(img_path)
+                    if frame is not None:
+                        video.write(frame)
+                    
+                    # 進捗表示
+                    if (i+1) % 30 == 0 or i+1 == len(processed_files):
+                        print(f"Video progress: {i+1}/{len(processed_files)} frames ({(i+1)/len(processed_files)*100:.1f}%)")
+                
+                video.release()
+                print(f"Video created successfully: {video_path}")
+            else:
+                print("No image files found to create video")
+        except Exception as e:
+            print(f"Error creating video: {e}")
 
 if __name__ == '__main__':
     main()
